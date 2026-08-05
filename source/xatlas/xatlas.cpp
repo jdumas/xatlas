@@ -3153,7 +3153,12 @@ public:
 		for (uint32_t i = 0; i < m_workers.size(); i++) {
 			Worker &worker = m_workers[i];
 			XA_DEBUG_ASSERT(worker.thread);
-			worker.wakeup = true;
+			// Set wakeup under the worker mutex so the shutdown notification cannot be
+			// lost between the worker's predicate check and cv.wait(); otherwise join() hangs.
+			{
+				std::lock_guard<std::mutex> lock(worker.mutex);
+				worker.wakeup = true;
+			}
 			worker.cv.notify_one();
 			if (worker.thread->joinable())
 				worker.thread->join();
@@ -3205,7 +3210,8 @@ public:
 		group.queue.push_back(task);
 		group.queueLock.unlock();
 		group.ref++;
-		// Wake up a worker to run this task.
+		// Wake up a worker to run this task. A lost wakeup here is harmless: wait()
+		// self-drains the queue on the caller and spins on ref, so no lock is needed.
 		for (uint32_t i = 0; i < m_workers.size(); i++) {
 			m_workers[i].wakeup = true;
 			m_workers[i].cv.notify_one();
