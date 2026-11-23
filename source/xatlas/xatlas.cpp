@@ -3103,15 +3103,6 @@ private:
 	std::atomic<uint32_t> m_value, m_maxValue, m_percent;
 };
 
-struct Spinlock
-{
-	void lock() { while(m_lock.test_and_set(std::memory_order_acquire)) {} }
-	void unlock() { m_lock.clear(std::memory_order_release); }
-
-private:
-	std::atomic_flag m_lock = ATOMIC_FLAG_INIT;
-};
-
 struct TaskGroupHandle
 {
 	uint32_t value = UINT32_MAX;
@@ -3252,7 +3243,7 @@ private:
 		std::atomic<bool> free;
 		Array<Task> queue; // Items are never removed. queueHead is incremented to pop items.
 		uint32_t queueHead = 0;
-		Spinlock queueLock;
+		std::mutex queueLock;
 		std::atomic<uint32_t> ref; // Increment when a task is enqueued, decrement when a task finishes.
 		void *userData;
 	};
